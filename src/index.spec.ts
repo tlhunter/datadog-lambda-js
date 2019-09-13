@@ -162,4 +162,30 @@ describe("datadog", () => {
       "x-datadog-trace-id": "123456",
     });
   });
+
+  it("returns a value from an async handler", async () => {
+    const localHandler = async (ev: any, context: any, callback: any) => {
+      return 312;
+    };
+    const wrapped = datadog(localHandler);
+    const value = await wrapped({}, {} as any, async () => {});
+
+    expect(value).toEqual(312);
+  });
+  it("returns a value from a callback handler", async () => {
+    const localHandler = function(ev: any, context: any, callback: any) {
+      callback(null, 312);
+    };
+    const wrapped = datadog(localHandler);
+    const value = await wrapped({}, {} as any, async () => {});
+
+    expect(value).toEqual(312);
+  });
+
+  it("will do an early timeout when tracing is enabled", async () => {
+    const localHandler = function(ev: any, context: any, callback: any) {}; // Never completes
+    const wrapped = datadog(localHandler);
+    const promise = wrapped({}, { getRemainingTimeInMillis: () => 100 } as any, async () => {});
+    await expect(promise).resolves;
+  });
 });

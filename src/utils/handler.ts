@@ -2,7 +2,7 @@ import { Callback, Context, Handler } from "aws-lambda";
 
 import { logError } from "./log";
 
-export type OnWrapFunc<T = (...args: any[]) => any> = (fn: T) => T;
+export type OnWrapFunc<T = (...args: any[]) => Promise<any>> = (fn: T) => T;
 
 /**
  * Wraps a lambda handler function, adding an onStart and onComplete hook.

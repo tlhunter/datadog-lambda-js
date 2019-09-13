@@ -13,10 +13,13 @@ export interface TraceConfig {
   autoPatchHTTP: boolean;
 }
 
+const EARLY_TIMEOUT_THRESHOLD = 50;
+
 export class TraceListener {
   private contextService = new TraceContextService();
   private context?: Context;
   private coldstart = true;
+  private timedOut = false;
 
   public get currentTraceHeaders() {
     return this.contextService.currentTraceHeaders;
@@ -56,7 +59,41 @@ export class TraceListener {
     if (spanContext !== null) {
       options.childOf = spanContext;
     }
+    const handlerName = this.handlerName;
 
-    return Tracer.wrap(this.handlerName, options, func);
+    const listener = this;
+
+    return async function(this: any, ...args: any[]) {
+      const localThis: any = this;
+      try {
+        return await Tracer.trace(handlerName, options, () => {
+          const timeout = listener.timeout();
+          const result = (func as any).apply(localThis, args);
+          return Promise.race([timeout, result]);
+        });
+      } finally {
+        if (listener.timedOut) {
+          // Just wait for the whole lambda process to time out, instead of letting
+          // this return. That way, the function will still be recorded as a timeout by
+          // X-Ray
+          await new Promise(() => {});
+        }
+      }
+    } as any;
+  }
+
+  private timeout() {
+    const { context } = this;
+    if (context === undefined || typeof context.getRemainingTimeInMillis !== "function") {
+      // NOOP, never times out
+      return new Promise(() => {});
+    }
+    return new Promise((_, reject) => {
+      const timeToWait = context.getRemainingTimeInMillis() - EARLY_TIMEOUT_THRESHOLD;
+      setTimeout(() => {
+        this.timedOut = true;
+        reject("Function timed out");
+      }, timeToWait);
+    });
   }
 }
