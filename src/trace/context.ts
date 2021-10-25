@@ -18,7 +18,7 @@ import {
   xraySubsegmentNamespace,
   xrayTraceEnvVar,
 } from "./constants";
-import { TraceExtractor } from "./listener";
+import { TraceExtractor, TraceConfig } from "./listener";
 
 export interface XRayTraceHeader {
   traceID: string;
@@ -48,13 +48,14 @@ export interface StepFunctionContext {
 export function extractTraceContext(
   event: any,
   context: Context,
-  extractor?: TraceExtractor,
+  config: TraceConfig,
 ): TraceContext | undefined {
   let trace;
+  const { traceExtractor, mergeDatadogXrayTraces } = config;
 
-  if (extractor) {
+  if (traceExtractor) {
     try {
-      trace = extractor(event, context);
+      trace = traceExtractor(event, context);
       logDebug(`extracted trace context from the custom extractor`, { trace });
     } catch (error) {
       if (error instanceof Error) {
@@ -84,7 +85,12 @@ export function extractTraceContext(
 
   if (trace !== undefined) {
     try {
-      addTraceContextToXray(trace);
+      const traceContext = {
+        ...getTraceContext(trace),
+        "mergeDatadogXrayTraces": mergeDatadogXrayTraces ? true : false
+      }
+      addXrayMetadata(xraySubsegmentKey, traceContext);
+
       logDebug(`added trace context to xray metadata`, { trace });
     } catch (error) {
       // This might fail if running in an environment where xray isn't set up, (like for local development).
@@ -97,14 +103,14 @@ export function extractTraceContext(
   return readTraceContextFromXray();
 }
 
-export function addTraceContextToXray(traceContext: TraceContext) {
+export function getTraceContext(traceContext: TraceContext) {
   const val = {
     "parent-id": traceContext.parentID,
     "sampling-priority": traceContext.sampleMode.toString(10),
     "trace-id": traceContext.traceID,
   };
 
-  addXrayMetadata(xraySubsegmentKey, val);
+  return val;
 }
 
 export function addStepFunctionContextToXray(context: StepFunctionContext) {
