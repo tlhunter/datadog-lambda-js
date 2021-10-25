@@ -1,13 +1,12 @@
+import { Context, Handler } from "aws-lambda";
 import http from "http";
 import nock from "nock";
-
-import { Context, Handler } from "aws-lambda";
 import {
   datadog,
   getTraceHeaders,
   sendDistributionMetric,
-  TraceHeaders,
   sendDistributionMetricWithDate,
+  TraceHeaders,
 } from "./index";
 import { incrementErrorsMetric, incrementInvocationsMetric } from "./metrics/enhanced-metrics";
 import { LogLevel, setLogLevel } from "./utils";
@@ -331,7 +330,7 @@ describe("datadog", () => {
 
     expect(mockedIncrementInvocations).toBeCalledTimes(1);
     expect(mockedIncrementInvocations).toBeCalledWith(expect.anything(), mockContext);
-    expect(logger.debug).toHaveBeenCalledTimes(9);
+    expect(logger.debug).toHaveBeenCalledTimes(10);
     expect(logger.debug).toHaveBeenLastCalledWith('{"status":"debug","message":"datadog:Unpatching HTTP libraries"}');
   });
 });

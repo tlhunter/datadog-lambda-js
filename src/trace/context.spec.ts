@@ -24,6 +24,7 @@ import {
   readTraceFromHTTPEvent,
   readTraceFromLambdaContext,
 } from "./context";
+import { TraceConfig } from "./listener";
 
 let sentSegment: any;
 let closedSocket = false;
@@ -620,6 +621,7 @@ describe("extractTraceContext", () => {
         },
       },
       {} as Context,
+      {} as TraceConfig,
     );
     expect(result).toEqual({
       parentID: "797643193680388251",
@@ -634,6 +636,7 @@ describe("extractTraceContext", () => {
         headers: null,
       },
       {} as Context,
+      {} as TraceConfig,
     );
     expect(result).toEqual(undefined);
   });
@@ -654,6 +657,10 @@ describe("extractTraceContext", () => {
       };
     };
 
+    const traceConfig: Partial<TraceConfig> = {
+      traceExtractor: extractor,
+    };
+
     const result = extractTraceContext(
       {
         foo: {
@@ -663,7 +670,7 @@ describe("extractTraceContext", () => {
         },
       },
       {} as Context,
-      extractor,
+      traceConfig,
     );
     expect(result).toEqual({
       parentID: "797643193680388251",
@@ -692,6 +699,10 @@ describe("extractTraceContext", () => {
       };
     };
 
+    const traceConfig: Partial<TraceConfig> = {
+      traceExtractor: extractor,
+    };
+
     const result = extractTraceContext(
       {
         foo: {
@@ -701,7 +712,7 @@ describe("extractTraceContext", () => {
         },
       },
       {} as Context,
-      extractor,
+      traceConfig,
     );
     expect(result).toEqual({
       parentID: "797643193680388254",
@@ -740,6 +751,7 @@ describe("extractTraceContext", () => {
         ],
       },
       {} as Context,
+      {} as TraceConfig,
     );
     expect(result).toEqual({
       parentID: "3369753143434738315",
@@ -788,6 +800,7 @@ describe("extractTraceContext", () => {
         ],
       },
       lambdaContext,
+      {} as TraceConfig,
     );
     expect(result).toEqual({
       parentID: "3369753143434738315",
@@ -799,7 +812,7 @@ describe("extractTraceContext", () => {
   it("returns trace read from env if no headers present", () => {
     process.env["_X_AMZN_TRACE_ID"] = "Root=1-5ce31dc2-2c779014b90ce44db5e03875;Parent=0b11cc4230d3e09e;Sampled=1";
 
-    const result = extractTraceContext({}, {} as Context);
+    const result = extractTraceContext({}, {} as Context, {} as TraceConfig);
     expect(result).toEqual({
       parentID: "797643193680388254",
       sampleMode: SampleMode.USER_KEEP,
@@ -810,7 +823,7 @@ describe("extractTraceContext", () => {
   it("returns trace read from env if no headers present", () => {
     process.env["_X_AMZN_TRACE_ID"] = "Root=1-5ce31dc2-2c779014b90ce44db5e03875;Parent=0b11cc4230d3e09e;Sampled=1";
 
-    const result = extractTraceContext({}, {} as Context);
+    const result = extractTraceContext({}, {} as Context, {} as TraceConfig);
     expect(result).toEqual({
       parentID: "797643193680388254",
       sampleMode: SampleMode.USER_KEEP,
@@ -832,6 +845,7 @@ describe("extractTraceContext", () => {
         },
       },
       {} as Context,
+      {} as TraceConfig,
     );
 
     expect(sentSegment instanceof Buffer).toBeTruthy();
@@ -855,41 +869,9 @@ describe("extractTraceContext", () => {
         },
       },
       {} as Context,
+      {} as TraceConfig,
     );
 
     expect(sentSegment).toBeUndefined();
-  });
-
-  it("adds step function metadata to xray", () => {
-    const stepFunctionEvent = {
-      dd: {
-        Execution: {
-          Name: "fb7b1e15-e4a2-4cb2-963f-8f1fa4aec492",
-          StartTime: "2019-09-30T20:28:24.236Z",
-        },
-        State: {
-          Name: "step-one",
-          RetryCount: 2,
-        },
-        StateMachine: {
-          Id: "arn:aws:states:us-east-1:601427279990:stateMachine:HelloStepOneStepFunctionsStateMachine-z4T0mJveJ7pJ",
-          Name: "my-state-machine",
-        },
-      },
-    } as const;
-    jest.spyOn(Date, "now").mockImplementation(() => 1487076708000);
-    process.env[xrayTraceEnvVar] = "Root=1-5e272390-8c398be037738dc042009320;Parent=94ae789b969f1cc5;Sampled=1";
-    process.env[awsXrayDaemonAddressEnvVar] = "localhost:127.0.0.1:2000";
-
-    extractTraceContext(stepFunctionEvent, {} as Context);
-    expect(sentSegment instanceof Buffer).toBeTruthy();
-
-    expect(closedSocket).toBeTruthy();
-
-    const sentMessage = sentSegment.toString();
-    expect(sentMessage).toMatchInlineSnapshot(`
-      "{\\"format\\": \\"json\\", \\"version\\": 1}
-      {\\"id\\":\\"11111\\",\\"trace_id\\":\\"1-5e272390-8c398be037738dc042009320\\",\\"parent_id\\":\\"94ae789b969f1cc5\\",\\"name\\":\\"datadog-metadata\\",\\"start_time\\":1487076708000,\\"end_time\\":1487076708000,\\"type\\":\\"subsegment\\",\\"metadata\\":{\\"datadog\\":{\\"root_span_metadata\\":{\\"step_function.execution_id\\":\\"fb7b1e15-e4a2-4cb2-963f-8f1fa4aec492\\",\\"step_function.retry_count\\":2,\\"step_function.state_machine_arn\\":\\"arn:aws:states:us-east-1:601427279990:stateMachine:HelloStepOneStepFunctionsStateMachine-z4T0mJveJ7pJ\\",\\"step_function.state_machine_name\\":\\"my-state-machine\\",\\"step_function.step_name\\":\\"step-one\\"}}}}"
-    `);
   });
 });

@@ -17,6 +17,7 @@ export const xraySubsegmentName = "datadog-metadata";
 export const xraySubsegmentKey = "trace";
 export const xrayBaggageSubsegmentKey = "root_span_metadata";
 export const xrayLambdaFunctionTagsKey = "lambda_function_tags";
+export const xrayMergeDatadogXrayTracesKey = "merge_xray_traces";
 export const xraySubsegmentNamespace = "datadog";
 export const xrayTraceEnvVar = "_X_AMZN_TRACE_ID";
 export const awsXrayDaemonAddressEnvVar = "AWS_XRAY_DAEMON_ADDRESS";
