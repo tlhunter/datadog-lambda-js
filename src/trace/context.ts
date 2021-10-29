@@ -1,12 +1,11 @@
-import { Context } from "aws-lambda";
+import { Context, SQSEvent } from "aws-lambda";
 import { BigNumber } from "bignumber.js";
 import { randomBytes } from "crypto";
 import { createSocket, Socket } from "dgram";
-import { SQSEvent } from "aws-lambda";
-
 import { logDebug, logError } from "../utils";
-import { isSQSEvent } from "../utils/event-type-guards";
+import { isAppSyncResolverEvent, isSQSEvent } from "../utils/event-type-guards";
 import {
+  awsXrayDaemonAddressEnvVar,
   parentIDHeader,
   SampleMode,
   samplingPriorityHeader,
@@ -18,7 +17,6 @@ import {
   xraySubsegmentName,
   xraySubsegmentNamespace,
   xrayTraceEnvVar,
-  awsXrayDaemonAddressEnvVar,
 } from "./constants";
 import { TraceExtractor } from "./listener";
 
@@ -60,7 +58,9 @@ export function extractTraceContext(
       trace = extractor(event, context);
       logDebug(`extracted trace context from the custom extractor`, { trace });
     } catch (error) {
-      logError("custom extractor function failed", error);
+      if (error instanceof Error) {
+        logError("custom extractor function failed", error as Error);
+      }
     }
   }
 
@@ -77,7 +77,9 @@ export function extractTraceContext(
     try {
       addStepFunctionContextToXray(stepFuncContext);
     } catch (error) {
-      logError("couldn't add step function metadata to xray", error);
+      if (error instanceof Error) {
+        logError("couldn't add step function metadata to xray", error as Error);
+      }
     }
   }
 
@@ -93,7 +95,9 @@ export function extractTraceContext(
       logDebug(`added trace context to xray metadata`, { trace });
     } catch (error) {
       // This might fail if running in an environment where xray isn't set up, (like for local development).
-      logError("couldn't add trace context to xray metadata", error);
+      if (error instanceof Error) {
+        logError("couldn't add trace context to xray metadata", error as Error);
+      }
     }
 
     return trace;
@@ -138,7 +142,9 @@ export function generateXraySubsegment(key: string, metadata: Record<string, any
     logDebug("couldn't parse xray trace header from env");
     return;
   }
-  const time = Date.now();
+
+  // Convert from milliseconds to seconds
+  const time = Date.now() * 0.001;
 
   return JSON.stringify({
     id: randomBytes(8).toString("hex"),
@@ -180,9 +186,16 @@ export function sendXraySubsegment(segment: string) {
       logDebug(`Xray daemon received metadata payload`, { error, bytes });
     });
   } catch (error) {
-    client?.close();
-    logDebug("Error occurred submitting to xray daemon", error);
+    if (error instanceof Error) {
+      client?.close();
+      logDebug("Error occurred submitting to xray daemon", error);
+    }
   }
+}
+
+export function readTraceFromAppSyncEvent(event: any): TraceContext | undefined {
+  event.headers = event.request.headers;
+  return readTraceFromHTTPEvent(event);
 }
 
 export function readTraceFromSQSEvent(event: SQSEvent): TraceContext | undefined {
@@ -218,7 +231,9 @@ export function readTraceFromSQSEvent(event: SQSEvent): TraceContext | undefined
       logDebug(`extracted trace context from sqs event`, { trace, event });
       return trace;
     } catch (err) {
-      logError("Error parsing SQS message trace data", err);
+      if (err instanceof Error) {
+        logError("Error parsing SQS message trace data", err as Error);
+      }
       return;
     }
   }
@@ -320,6 +335,10 @@ export function readTraceFromEvent(event: any): TraceContext | undefined {
 
   if (event.headers !== null && typeof event.headers === "object") {
     return readTraceFromHTTPEvent(event);
+  }
+
+  if (isAppSyncResolverEvent(event)) {
+    return readTraceFromAppSyncEvent(event);
   }
 
   if (isSQSEvent(event)) {
